@@ -1,0 +1,17 @@
+/**:
+  ros__parameters:
+    gripper_available: true
+    lights_available: true
+    gripper_pen: 13.0
+    lights_pen: 11.0
+    camera_pen: 16.0
+    light_min: 1100.0
+    light_max: 1900.0
+    gripper_closed: 1400.0
+    gripper_open: 1600.0
+    tilt_int: 0.0
+    tilt_max: 60.0
+    tilt_min: -60.0
+    arm_at_startup: false
+    mode: "manual"
+    

@@ -1,0 +1,22 @@
+/bluerov2/depth_controller:
+  ros__parameters:
+    pid:
+      kp: 3.0
+      ki: 0.2
+      kd: 0.5
+      i_lim: 3.0
+    target_depth: 2.0
+    flotability: 11.5
+    input_topic: "global_position/rel_alt"
+    setpoint_topic: "desired_depth"
+    output_topic: "rc/override"
+    control_rate: 20.0
+    enable: True
+
+
+/bluerov2/yaw_controller:
+  ros__parameters:
+    pid:
+      kp: 2.0
+      ki: 0.1
+      kd: 0.5

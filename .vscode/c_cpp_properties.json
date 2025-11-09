@@ -1,0 +1,32 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/mahmoud/mir_ws/install/tag_msgs/include/**",
+        "/home/mahmoud/mir_ws/install/ping360_sonar_msgs/include/**",
+        "/home/mahmoud/mir_ws/install/localization_interface/include/**",
+        "/home/mahmoud/mir_ws/install/bluerov2_interface/include/**",
+        "/home/mahmoud/turtlebot3_ws/install/turtlebot3_fake_node/include/**",
+        "/home/mahmoud/turtlebot3_ws/install/turtlebot3_msgs/include/**",
+        "/home/mahmoud/turtlebot3_ws/install/turtlebot3_gazebo/include/**",
+        "/home/mahmoud/spain_ws/install/test_plugins/include/**",
+        "/home/mahmoud/spain_ws/install/sim_multirobot/include/**",
+        "/home/mahmoud/spain_ws/install/plugin_base/include/**",
+        "/home/mahmoud/spain_ws/install/multi_robot_interface/include/**",
+        "/home/mahmoud/spain_ws/install/custom_test_interfaces/include/**",
+        "/opt/ros/humble/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

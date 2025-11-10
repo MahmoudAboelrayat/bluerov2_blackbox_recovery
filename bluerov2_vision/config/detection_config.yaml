@@ -1,0 +1,22 @@
+# YOLOv11 Detection Configuration
+
+# Model confidence threshold (0.0 - 1.0)
+# Lower values detect more objects but with more false positives
+confidence: 0.5
+
+# IOU threshold for NMS (Non-Maximum Suppression)
+# Controls how much overlap is allowed between detections
+threshold: 0.45
+
+# Camera resolution (width, height)
+camera_resolution:
+  width: 640
+  height: 480
+
+# Model settings
+model:
+  # Path to model weights (relative to script directory)
+  weights_path: "weights/best.pt"
+  
+  # Device: "cpu" or "0" (for GPU)
+  device: 0

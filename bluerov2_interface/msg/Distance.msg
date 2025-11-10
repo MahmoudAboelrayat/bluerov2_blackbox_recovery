@@ -1,0 +1,2 @@
+int32 blackbox_distance
+int32 handle_distance

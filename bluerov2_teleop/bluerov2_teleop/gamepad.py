@@ -5,8 +5,8 @@ import math
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from struct import pack, unpack
-from std_msgs.msg import Int16, Float64, Empty, Float64MultiArray, String
-from sensor_msgs.msg import Joy, Imu, FluidPressure, LaserScan
+from std_msgs.msg import Int16, Float64, Float64MultiArray, String, UInt16MultiArray
+from sensor_msgs.msg import Joy, Imu
 from mavros_msgs.srv import CommandLong, SetMode, StreamRate
 from mavros_msgs.msg import OverrideRCIn, Mavlink, MountControl
 from mavros_msgs.srv import EndpointAdd
@@ -55,7 +55,7 @@ class GamepadTelop(Node):
         self.tilt = self.tilt_int
         self.gripper = self.gripper_close
 
-        self.pub_msg_override = self.create_publisher(OverrideRCIn, "rc/override", 10)
+        self.pub_msg_override = self.create_publisher(UInt16MultiArray, "controller/manual", 10)
         self.pub_camera_anlge = self.create_publisher(MountControl, 'mount_control/command',10)
         self.pub_feedback_camera = self.create_publisher(Float64,"camera/angle",10)
         qos_profile = QoSProfile(
@@ -266,30 +266,32 @@ class GamepadTelop(Node):
         lateral_left_right = self.mapValueScalSat(-cmd_vel.linear.y)
         pitch_left_right = self.mapValueScalSat(cmd_vel.angular.y)
         # send the commands to the mthrusters 
-        self.setOverrideRCIN(pitch_left_right, roll_left_right, ascend_descend, yaw_left_right, forward_reverse,
+        self.setPWM(pitch_left_right, roll_left_right, ascend_descend, yaw_left_right, forward_reverse,
                                 lateral_left_right)
         
 
 
-    def setOverrideRCIN(self, channel_pitch, channel_roll, channel_throttle, channel_yaw, channel_forward,
+    def setPWM(self, channel_pitch, channel_roll, channel_throttle, channel_yaw, channel_forward,
                         channel_lateral):
         ''' This function replaces setservo for motor commands.
             It overrides Rc channels inputs and simulates motor controls.
             In this case, each channel manages a group of motors (DOF) not individually as servo set '''
 
         
-        msg_override = OverrideRCIn()
-        msg_override.channels[0] = np.uint(channel_pitch)  # pulseCmd[4]--> pitch
-        msg_override.channels[1] = np.uint(channel_roll)  # pulseCmd[3]--> roll
-        msg_override.channels[2] = np.uint(channel_throttle)  # pulseCmd[2]--> heave
-        msg_override.channels[3] = np.uint(channel_yaw)  # pulseCmd[5]--> yaw
-        msg_override.channels[4] = np.uint(channel_forward)  # pulseCmd[0]--> surge
-        msg_override.channels[5] = np.uint(channel_lateral)  # pulseCmd[1]--> sway
-        msg_override.channels[6] = 1500 # camera pan servo motor speed 
-        msg_override.channels[7] = 1500 #camers tilt servo motro speed
+        msg_array = UInt16MultiArray()
 
-
-        self.pub_msg_override.publish(msg_override)
+        # Fill it with your channel data in order
+        msg_array.data = [
+            np.uint16(channel_pitch),    # Channel 0
+            np.uint16(channel_roll),     # Channel 1
+            np.uint16(channel_throttle), # Channel 2
+            np.uint16(channel_yaw),      # Channel 3
+            np.uint16(channel_forward),  # Channel 4
+            np.uint16(channel_lateral),  # Channel 5
+            1500,                        # Channel 6 (camera pan)
+            1500                         # Channel 7 (camera tilt)
+        ]
+        self.pub_msg_override.publish(msg_array)
 
 
     def mapValueScalSat(self, value):

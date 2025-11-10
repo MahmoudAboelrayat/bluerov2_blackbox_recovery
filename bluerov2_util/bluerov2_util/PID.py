@@ -1,19 +1,24 @@
 import time
+from math import pi
 class PID:
-    def __init__(self, kp=0.0, ki=0.0, kd=0.0, i_limit=None):
+    def __init__(self, kp=0.0, ki=0.0, kd=0.0, i_limit=None, angle = False):
         self.kp = float(kp); self.ki = float(ki); self.kd = float(kd)
         self.i_limit = None if i_limit is None else float(i_limit)
         self.integrator = 0.0
         self.prev_error = 0.0
         self.prev_time = None
         self.prev_d = 0.0
-
+        self.angle_controller = angle
 
     def reset(self):
         self.integrator = 0.0
         self.prev_error = 0.0
         self.prev_time = None
         self.prev_d = 0.0
+
+    def normalize_angle(self, angle):
+        """ Ensure angle remains within [-π, π] """
+        return (angle + pi) % (2 * pi) - pi
 
     def update(self, setpoint, measurement, feedforward=0.0, now=None):
         if now is None:
@@ -24,7 +29,8 @@ class PID:
             dt = now - self.prev_time
         
         error = setpoint - measurement
-
+        if self.angle_controller:
+            error = self.normalize_angle(error)
         # P
         p = self.kp * error
 

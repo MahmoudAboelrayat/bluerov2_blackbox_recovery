@@ -17,8 +17,8 @@ def generate_launch_description():
     return LaunchDescription([
         LifecycleNode(
             package='bluerov2_controller',
-            executable='bluerov2_depth_hold',
-            name='depth_controller',
+            executable='bluerov2_yaw_hold',
+            name='yaw_controller',
             namespace=namespace,
             output='screen',
             parameters=[config],

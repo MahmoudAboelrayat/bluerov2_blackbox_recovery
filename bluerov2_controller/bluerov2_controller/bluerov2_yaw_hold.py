@@ -9,22 +9,22 @@ from std_msgs.msg import UInt16,Float64
 import numpy as np
 from bluerov2_util.PID import PID  # your reusable PID class
 from rcl_interfaces.msg import SetParametersResult
+from sensor_msgs.msg import Imu
 
 class Bluerov2DepthControl(LifecycleNode):
 
     def __init__(self):
-        super().__init__("depth_controller")
-        self.get_logger().info("Initializing Bluerov2 Depth Control Node...")
+        super().__init__("yaw_controller")
+        self.get_logger().info("Initializing Bluerov2 Yaw Control Node...")
 
         # Declare parameters (flattened dot notation for nested PID)
         self.declare_parameter('pid.kp', 0.0)
         self.declare_parameter('pid.ki', 0.0)
         self.declare_parameter('pid.kd', 0.0)
-        self.declare_parameter('target_depth', 0.0)
-        self.declare_parameter('flotability', 0.0)
+        self.declare_parameter('target_yaw', 0.0)
         self.declare_parameter('input_topic', '/input')
         self.declare_parameter('setpoint_topic', '/setpoint')
-        self.declare_parameter('output_topic', 'controller/pwm_depth')
+        self.declare_parameter('output_topic', 'controller/pwm_yaw')
         self.declare_parameter('control_rate', 20.0)
         self.declare_parameter('pid.i_lim',0.0)
         self.declare_parameter('enable', True)
@@ -34,24 +34,21 @@ class Bluerov2DepthControl(LifecycleNode):
 
         # Runtime attributes
         self._pid = None
-        self.goal_depth = 0.0
-        self._flotability = 0.0
-        self._current_depth = 0.0
+        self.goal_yaw = 0.0
+        self._current_yaw = 0.0
         self._input_sub = None
         self._output_pub = None
 
     # Lifecycle callbacks
     def on_configure(self, state: State) -> TransitionCallbackReturn:
-        self.get_logger().info("Configuring Depth Controller...")
+        self.get_logger().info("Configuring Yaw Controller...")
 
         # Load parameters
         kp = self.get_parameter('pid.kp').value
         ki = self.get_parameter('pid.ki').value
         kd = self.get_parameter('pid.kd').value
         i_lim = self.get_parameter('pid.i_lim').value
-        self.goal_depth = self.get_parameter('target_depth').value
-        self.flotability = self.get_parameter('flotability').value
-        self.get_logger().info(f"flotability:{self.flotability}")
+        self.goal_yaw = self.get_parameter('target_yaw').value
         input_topic = self.get_parameter('input_topic').value
         self.get_logger().info(f"input_topic:{input_topic}")
         output_topic = self.get_parameter('output_topic').value
@@ -60,7 +57,7 @@ class Bluerov2DepthControl(LifecycleNode):
         self.hold = self.get_parameter('hold').value
         self.get_logger().info(f"rate:{self.rate}")
 
-        self._pid = PID(kp, ki, kd, i_lim)  # optional limits
+        self._pid = PID(kp, ki, kd, i_lim, angle = True)  # optional limits
         self.get_logger().info(f"output topic: {output_topic}")
 
         self._output_pub = self.create_publisher(UInt16, output_topic, 10)
@@ -74,7 +71,7 @@ class Bluerov2DepthControl(LifecycleNode):
         return TransitionCallbackReturn.SUCCESS
 
     def on_activate(self, state: State) -> TransitionCallbackReturn:
-        self.get_logger().info("Activating Depth Controller...")
+        self.get_logger().info("Activating Yaw Controller...")
 
         qos_profile = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
@@ -83,15 +80,15 @@ class Bluerov2DepthControl(LifecycleNode):
         )
 
         self._input_sub = self.create_subscription(
-            Float64,
+            Imu,
             self._input_topic,
-            self._on_depth_measurement,
+            self._on_yaw_measurement,
             qos_profile=qos_profile
         )
 
         self.setpoint_sub = self.create_subscription(Float64,
                             self.setpoint_topic,
-                            self.get_target_depth,
+                            self.get_target_yaw,
                             qos_profile=qos_profile)
         # Control timer
         self._pid.reset()
@@ -120,11 +117,11 @@ class Bluerov2DepthControl(LifecycleNode):
         return TransitionCallbackReturn.SUCCESS
 
     def on_cleanup(self, state: State) -> TransitionCallbackReturn:
-        self.get_logger().info("Cleaning up Depth Controller...")
+        self.get_logger().info("Cleaning up Yaw Controller...")
         return TransitionCallbackReturn.SUCCESS
 
     def on_shutdown(self, state: State) -> TransitionCallbackReturn:
-        self.get_logger().info("Shutting down Depth Controller...")
+        self.get_logger().info("Shutting down Yaw Controller...")
         return TransitionCallbackReturn.SUCCESS
 
     # Parameter update callback for runtime tuning
@@ -149,10 +146,22 @@ class Bluerov2DepthControl(LifecycleNode):
 
 
     # Subscriber callback
-    def get_target_depth(self,msg):
-        self.goal_depth = msg.data
-    def _on_depth_measurement(self, msg):
-        self._current_depth = msg.data
+    def get_target_yaw(self,msg):
+        self.goal_yaw = msg.data
+    def _on_yaw_measurement(self, msg):
+        x = msg.orientation.x
+        y = msg.orientation.y
+        z = msg.orientation.z
+        w = msg.orientation.w
+        sinr_cosp = 2.0 * (w * x + y * z)
+        cosr_cosp = 1.0 - 2.0 * (x * x + y * y)
+        sinp = 2.0 * (w * y - z * x)
+        siny_cosp = 2.0 * (w * z + x * y)
+        cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
+        # roll = np.arctan2(sinr_cosp, cosr_cosp)
+        # pitch = np.arcsin(sinp)
+        yaw = np.arctan2(siny_cosp, cosy_cosp)
+        self._current_yaw = yaw
 
     # Timer callback: computes PID output and publishes RC override
     def _control_loop(self):
@@ -161,25 +170,34 @@ class Bluerov2DepthControl(LifecycleNode):
         if self.hold:
             if self.init_control:
                 self.init_control = False
-                self.target = self._current_depth
+                self.target = self._current_yaw
         else:
-            self.target = self.goal_depth
+            self.target = self.goal_yaw
 
-        out,dic = self._pid.update(self.target, self._current_depth,feedforward=self.flotability/10) 
+        angle = (self._current_yaw + np.pi) % (2 * np.pi) - np.pi
+        self.get_logger().info(f"current yaw: {angle}, target yaw: {self.target}")
+        out,dic = self._pid.update(self.target, self._current_yaw) 
         force = -out
         self.get_logger().info(f"PID debug: {dic}")
         pwm = self._force_to_pwm(force*10 / 4)
+        self.get_logger().info(f"PWM: {force}")
 
         msg_pwm = UInt16()
-        msg_pwm.data= int(pwm)  # heave
+        msg_pwm.data= int(pwm)
         self._output_pub.publish(msg_pwm)
 
     # Convert force to PWM
     def _force_to_pwm(self, force):
         if force > 0:
-            pwm = 1536 + 9.7 * force
+            # pwm = 1536 + 9.7 * force
+            pwm = 1500 + 9.7 * force
+
+        elif force == 0:
+            pwm = 1500
         else:
-            pwm = 1464 + 12.781 * force
+            # pwm = 1464 + 12.781 * force
+            pwm = 1500 + 12.781 * force
+
         return np.clip(pwm, 1300, 1700)
 
     def send_stop_pwm(self):

@@ -57,8 +57,8 @@ class ImuLocalization(Node):
 
         if np.linalg.norm(self.vel) < self.vel_threshold:
             self.get_logger().info("Ignoring update velocity below threshold")
-            return
-        self.pos += self.vel * dt + 0.5 * accel_world * dt**2
+        else:
+            self.pos += self.vel * dt + 0.5 * accel_world * dt**2
 
         # Publish odometry
         odom_msg = Odometry()

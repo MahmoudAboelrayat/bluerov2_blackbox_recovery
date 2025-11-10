@@ -2,15 +2,52 @@ import rclpy
 from rclpy.node import Node
 from time import sleep
 from mavros_msgs.srv import CommandLong
-from mavros_msgs.msg import MountControl
+from mavros_msgs.msg import MountControl,OverrideRCIn
 from rcl_interfaces.srv import GetParameters
 from lifecycle_msgs.msg import Transition,State
 from lifecycle_msgs.srv import ChangeState, GetState
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
+from std_msgs.msg import UInt16MultiArray, UInt16
+from bluerov2_util import LifecycleManager
 class bluerov2_bringup(Node):
     def __init__(self):
         super().__init__("bluerov2_bringup")
+        qos_profile = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1
+        )
 
-        self.pub_camera_anlge = self.create_publisher(MountControl, 'mount_control/command', 10)
+        #### Subscribers #### 
+        #TODO:: Make the topic names variable depending on the parameters
+        self.sub_manual_pwm = self.create_subscription(
+            UInt16MultiArray,
+            'controller/manual',
+            lambda msg: setattr(self, 'RC_pwms', msg.data),
+            qos_profile=qos_profile
+        )
+
+        # Heave PWM
+        self.sub_heave_pwm = self.create_subscription(
+            UInt16,
+            'controller/pwm_heave',
+            lambda msg: setattr(self, 'heave', msg.data),
+            qos_profile=qos_profile
+        )
+
+        # Yaw PWM
+        self.sub_yaw_pwm = self.create_subscription(
+            UInt16,
+            'controller/pwm_yaw',
+            lambda msg: setattr(self, 'yaw', msg.data),
+            qos_profile=qos_profile
+        )
+
+        ##### Publishers #####
+        self.pub_camera_anlge = self.create_publisher(MountControl, 'mount_control/command', qos_profile = 10)
+        self.pub_msg_override = self.create_publisher(OverrideRCIn, 'rc/override', qos_profile =10)
+
+        ###### Parameters ####
         self.declare_parameter("initialize", False)
         self.declare_parameter("lights_available", True)
         self.declare_parameter("gripper_available", True)
@@ -47,16 +84,45 @@ class bluerov2_bringup(Node):
         if self.initialization_test_flag:
             self.initialization_test()
 
+        self.RC_pwms = [1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500]
+        self.heave = 1500
+        self.yaw = 1500
+
+        self.depth_controller_node_name = "depth_controller"
+        self.yaw_controller_node_name = "yaw_controller"
+        self.gimbal_node_name = "bluerov2_gimbal"
+
+        self.depth_manager = LifecycleManager(self, self.depth_controller_node_name)
+        self.yaw_manager = LifecycleManager(self, self.yaw_controller_node_name)
+        self.gimbal_manager = LifecycleManager(self, self.gimbal_node_name)
+
+        self.depth_manager.configure()
+        self.yaw_manager.configure()
+        self.gimbal_manager.configure()
+
         self.create_timer(0.5, self.timer_callback)
+
     def timer_callback(self):
         self.get_mode("mode")
+        self.get_logger().info(f"the mode is: {self.mode}")
+        #### Sending Thruster Commands ####
+        if self.mode == "correction":
+            self.RC_pwms[2] = self.heave
+            self.RC_pwms[3] = self.yaw
+
+        self.setOverrideRCIN(self.RC_pwms)
 
         if self.mode_change:
             self.get_logger().info(f"Mode changed to {self.mode}")
             if self.mode == "correction":
-                self.activate_lifecycle('bluerov2_gimbal')
+                self.depth_manager.activate()
+                self.yaw_manager.activate()
+                self.gimbal_manager.activate()
             elif self.mode == "manual":
-                self.deactivate_gimbal('bluerov2_gimbal')
+                self.depth_manager.deactivate()
+                self.yaw_manager.deactivate()
+                self.gimbal_manager.deactivate()
+            self.mode_change = False 
                
         
 
@@ -100,7 +166,8 @@ class bluerov2_bringup(Node):
         sleep(1.0)
         
         
-        self.get_logger().info("Light and camera servo test completed.")  
+        self.get_logger().info("Light and camera servo test completed.")
+
         
     def send_servo_comand(self, pin_number, value):
         '''
@@ -137,6 +204,25 @@ class bluerov2_bringup(Node):
         self.pub_camera_anlge.publish(msg)
 
 
+    def setOverrideRCIN(self, pwms):
+        ''' This function replaces setservo for motor commands.
+            It overrides Rc channels inputs and simulates motor controls.
+            In this case, each channel manages a group of motors (DOF) not individually as servo set '''
+
+
+        msg_override = OverrideRCIn()
+        msg_override.channels[0] = pwms[0]  # pulseCmd[4]--> pitch
+        msg_override.channels[1] = pwms[1]   # pulseCmd[3]--> roll
+        msg_override.channels[2] = pwms[2]  # pulseCmd[2]--> heave
+        msg_override.channels[3] = pwms[3]   # pulseCmd[5]--> yaw
+        msg_override.channels[4] = pwms[4]   # pulseCmd[0]--> surge
+        msg_override.channels[5] = pwms[5]   # pulseCmd[1]--> sway
+        msg_override.channels[6] = 1500 # camera pan servo motor speed 
+        msg_override.channels[7] = 1500 #camers tilt servo motro speed
+
+
+        self.pub_msg_override.publish(msg_override)
+
     def get_mode(self, name):
         target_node = 'bluerov2_teleop'
         self.client = self.create_client(GetParameters, f'{target_node}/get_parameters')
@@ -163,139 +249,6 @@ class bluerov2_bringup(Node):
         except Exception as e:
             self.get_logger().error(f'Failed to get parameter: {e}')
 
-    def activate_lifecycle(self, node_name):
-        ns = self.get_namespace().strip('/')
-        self.get_logger().info(f'Activating lifecycle node: {node_name} in namespace: {ns}')
-        full_name = f'/{ns}/{node_name}/change_state' if ns else f'/{node_name}/change_state'
-        client = self.create_client(ChangeState, full_name)
-        if not client.service_is_ready():
-            self.get_logger().warn(f'Lifecycle service not ready for {node_name}')
-            return
-
-        # Step 1: Configure the node
-        configure_req = ChangeState.Request()
-        configure_req.transition.id = Transition.TRANSITION_CONFIGURE
-
-        future_config = client.call_async(configure_req)
-
-        # Callback after configure attempt
-        def after_config(fut):
-            try:
-                resp = fut.result()
-                if resp.success:
-                    self.get_logger().info(f'{node_name} configured successfully.')
-
-                    # Step 2: Activate after successful configure
-                    activate_req = ChangeState.Request()
-                    activate_req.transition.id = Transition.TRANSITION_ACTIVATE
-                    future_activate = client.call_async(activate_req)
-
-                    def after_activate(fut_act):
-                        try:
-                            resp_act = fut_act.result()
-                            if resp_act.success:
-                                self.get_logger().info(f'{node_name} activated successfully.')
-                            else:
-                                self.get_logger().warn(f'Failed to activate {node_name}')
-                        except Exception as e:
-                            self.get_logger().error(f'Error activating {node_name}: {e}')
-
-                    future_activate.add_done_callback(after_activate)
-
-                else:
-                    self.get_logger().warn(f'Failed to configure {node_name}')
-            except Exception as e:
-                self.get_logger().error(f'Error configuring {node_name}: {e}')
-
-        future_config.add_done_callback(after_config)
-
-
-    def deactivate_gimbal(self, node_name):
-        """
-        Attempts to deactivate and then cleanup a ROS 2 lifecycle node.
-        """
-        # 🌟 Setup Client Names
-        ns = self.get_namespace().strip('/')
-        client_name = f'/{ns}/{node_name}/change_state' if ns else f'/{node_name}/change_state'
-        state_name = f'/{ns}/{node_name}/get_state' if ns else f'/{node_name}/get_state'
-        self.get_logger().info(f"client {client_name}")
-        # 🌟 Create Clients
-        change_client = self.create_client(ChangeState, client_name)
-        state_client = self.create_client(GetState, state_name)
-
-        # 🌟 Wait for Services
-        if not change_client.wait_for_service(timeout_sec=2.0):
-            self.get_logger().warn(f"ChangeState service not available for **{node_name}**")
-            return
-        if not state_client.wait_for_service(timeout_sec=2.0):
-            self.get_logger().warn(f"GetState service not available for **{node_name}**")
-            return
-
-        # 🌟 Get Current State
-        current_state = self._get_node_state(node_name, state_client)
-        if current_state is None:
-            return
-
-        # 🌟 Deactivate if Active
-        if current_state == State.PRIMARY_STATE_ACTIVE:
-            self.get_logger().info(f"**Deactivating** {node_name}...")
-            if not self._send_transition(node_name, change_client, Transition.TRANSITION_DEACTIVATE):
-                return # Exit on failed deactivation
-        else:
-            self.get_logger().info(f"{node_name} is not active (state id={current_state}), skipping deactivate.")
-        
-        # ---
-        
-        # 🌟 Check State and Cleanup if Inactive
-        # Refresh state after attempted deactivation
-        current_state = self._get_node_state(node_name, state_client)
-        if current_state is None:
-            return
-
-        if current_state == State.PRIMARY_STATE_INACTIVE:
-            self.get_logger().info(f"**Cleaning up** {node_name}...")
-            if not self._send_transition(node_name, change_client, Transition.TRANSITION_CLEANUP):
-                return # Exit on failed cleanup
-        elif current_state == State.PRIMARY_STATE_FINALIZED:
-            self.get_logger().info(f"{node_name} is already **Finalized**, no further action.")
-        else:
-            self.get_logger().warn(f"Cannot cleanup {node_name}. Current state is **{current_state}**.")
-
-
-    # Helper functions added for cleaner, reusable logic and error checking
-
-    def _get_node_state(self, node_name, state_client):
-        """Internal helper to get the current state of the node."""
-        state_req = GetState.Request()
-        future_state = state_client.call_async(state_req)
-        rclpy.spin_until_future_complete(self, future_state, timeout_sec=5.0)
-        
-        if future_state.result() is None or not future_state.done():
-            self.get_logger().warn(f"Failed to get state for **{node_name}** or call timed out.")
-            return None
-        
-        return future_state.result().current_state.id
-
-    def _send_transition(self, node_name, change_client, transition_id):
-        """Internal helper to send a ChangeState transition and check the result."""
-        transition_name = Transition.TRANSITION_DEACTIVATE if transition_id == Transition.TRANSITION_DEACTIVATE else Transition.TRANSITION_CLEANUP
-        
-        req = ChangeState.Request()
-        req.transition.id = transition_id
-        future = change_client.call_async(req)
-        rclpy.spin_until_future_complete(self, future, timeout_sec=5.0) # Increased timeout
-        
-        result = future.result()
-        if result is None or not future.done():
-            self.get_logger().error(f"Transition **{transition_name}** for {node_name} failed (call timed out or no response).")
-            return False
-        
-        if not result.success:
-            self.get_logger().error(f"Transition **{transition_name}** for {node_name} failed (service returned failure).")
-            return False
-            
-        self.get_logger().info(f"Transition **{transition_name}** successfully requested for {node_name}.")
-        return True
 
 def main(args=None):
     rclpy.init(args=args)

@@ -47,15 +47,15 @@ class Bluerov2Gimbal(Node):
 
     def on_deactivate(self, state: State) -> TransitionCallbackReturn:
         self.get_logger().info("Camera Gimbal deactivate.")
-        # if hasattr(self, "sub_tilt_angle") and self.sub_tilt_angle is not None:
-        #     self.destroy_subscription(self._sub_tilt_angle)
-        #     self.sub_tilt_angle = None
+        if hasattr(self, "sub_tilt_angle") and self.sub_tilt_angle is not None:
+            self.destroy_subscription(self._sub_tilt_angle)
+            self.sub_tilt_angle = None
 
-        # if hasattr(self, "sub_imu") and self.sub_imu is not None:
-        #     self.destroy_subscription(self.sub_imu)
-        #     self.sub_imu = None
+        if hasattr(self, "sub_imu") and self.sub_imu is not None:
+            self.destroy_subscription(self.sub_imu)
+            self.sub_imu = None
 
-        # self.stop_msg()
+        self.stop_msg()
         return super().on_deactivate(state)
 
     def on_cleanup(self, state: State) -> TransitionCallbackReturn:

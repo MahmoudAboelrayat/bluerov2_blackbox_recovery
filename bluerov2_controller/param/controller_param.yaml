@@ -9,8 +9,9 @@
     flotability: 11.5
     input_topic: "global_position/rel_alt"
     setpoint_topic: "desired_depth"
-    output_topic: "rc/override"
+    output_topic: "controller/pwm_heave"
     control_rate: 20.0
+    hold: False
     enable: True
 
 
@@ -20,3 +21,10 @@
       kp: 2.0
       ki: 0.1
       kd: 0.5
+    target_yaw: 0.785
+    input_topic: "imu/data"
+    setpoint_topic: "desired_yaw"
+    output_topic: "controller/pwm_yaw"
+    control_rate: 20.0
+    hold: True
+    enable: True

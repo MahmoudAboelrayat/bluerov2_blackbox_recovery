@@ -17,6 +17,7 @@ setup(
     license='TODO: License declaration',
     extras_require={'test': ['pytest']},
     entry_points={
-        'console_scripts': ['imu_localization = bluerov2_localization.imu_localization:main']
+        'console_scripts': ['imu_localization = bluerov2_localization.imu_localization:main',
+                            'aruco_detector = bluerov2_localization.aruco_detector:main']
     },
 )

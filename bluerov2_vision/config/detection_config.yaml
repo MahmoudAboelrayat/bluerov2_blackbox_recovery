@@ -20,7 +20,7 @@ camera_resolution:
 # Model settings
 model:
   # Path to model weights (relative to script directory)
-  weights_path: "weights/best.pt"
+  weights_path: "weights/Mk7.pt"
   
   # Device: "cpu" or "0" (for GPU)
   device: 0

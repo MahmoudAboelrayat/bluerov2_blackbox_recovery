@@ -107,13 +107,11 @@ class YOLOv11DetectionNode(Node):
         )
         self.declare_parameter('handle_detection', self.config['handle_detection'], handle_detection_descriptor)
         
-        # Device parameter as string - accepts "cpu" or "0" (for GPU)
+        # Device parameter (integer or string)
         device_descriptor = ParameterDescriptor(
-            description='Device for YOLO inference: "0" for GPU or "cpu" for CPU'
+            description='Device for YOLO inference: 0 for GPU, "cpu" for CPU'
         )
-        # Convert device to string if it's an integer
-        device_value = str(self.config['model']['device'])
-        self.declare_parameter('device', device_value, device_descriptor)
+        self.declare_parameter('device', self.config['model']['device'], device_descriptor)
         
         self.get_logger().info("ROS parameters declared with range constraints")
 
@@ -141,16 +139,6 @@ class YOLOv11DetectionNode(Node):
                 if not (0.0 <= param.value <= 1.0):
                     self.get_logger().error(
                         f"Parameter {param.name} value {param.value} out of range [0.0, 1.0]"
-                    )
-                    return SetParametersResult(successful=False)
-            
-            # Validate device parameter
-            if param.name == 'device':
-                valid_devices = ['cpu', '0', '1', '2', '3']  # Support up to 4 GPUs
-                if param.value not in valid_devices:
-                    self.get_logger().error(
-                        f"Parameter device value '{param.value}' is invalid. "
-                        f"Valid values: {valid_devices}"
                     )
                     return SetParametersResult(successful=False)
             
@@ -192,12 +180,10 @@ class YOLOv11DetectionNode(Node):
             # Load YOLO model
             model = YOLO(weights_path)
             
-            # Convert device string to appropriate format for YOLO
-            # "cpu" stays as "cpu", "0" can be used directly as GPU 0
-            device = self.device
-            model.to(device)
+            # Set device
+            model.to(self.device)
             
-            self.get_logger().info(f"Model loaded from {weights_path} on device {device}")
+            self.get_logger().info(f"Model loaded from {weights_path} on device {self.device}")
             return model
             
         except Exception as e:

@@ -11,20 +11,20 @@ class ArucoStaticTFs(Node):
 
         self.broadcaster = tf2_ros.StaticTransformBroadcaster(self)
         marker_poses = [
-            (7.0, 4.5, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 0
-            (1.0, 1.5, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 1
-            (4.0, 7.5, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 2
-            (7.0, 7.5, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 3
-            (4.0, 4.5, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 4
-            (4.0, 1.5, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 5
-            (7.0, 1.5, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 6
-            (1.0, 4.5, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 7
-            (1.0, 7.5, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 8
+            (4.5, 7.0, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 0
+            (1.5, 1.0, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 1
+            (7.5, 4.0, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 2
+            (7.5, 7.0, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 3
+            (4.5, 4.0, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 4
+            (1.5, 4.0, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 5
+            (1.5, 7.0, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 6
+            (4.5, 1.0, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 7
+            (7.5, 1.0, 4.8, 0.0, 0.0, 0.0, 1.0),  # Aruco 8
         ]
         transforms = []
 
         # Define placeholders for 8 ArUco markers
-        for i in range(0, 8):
+        for i in range(0, 9):
             x, y, z, qx, qy, qz, qw = marker_poses[i]  # i ranges from 1 to 8
             t = TransformStamped()
             t.header.stamp = self.get_clock().now().to_msg()
@@ -44,7 +44,7 @@ class ArucoStaticTFs(Node):
             transforms.append(t)
 
         # Send all static transforms at once
-        self.broadcaster.send_transform(transforms)
+        self.broadcaster.sendTransform(transforms)
         self.get_logger().info('Published static transforms for 8 ArUco markers.')
 
 def main(args=None):

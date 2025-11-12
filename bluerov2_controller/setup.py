@@ -24,6 +24,7 @@ setup(
     entry_points={
         'console_scripts': ['bluerov2_gimbal = bluerov2_controller.bluerov2_gimbal:main',
                             'bluerov2_depth_hold = bluerov2_controller.bluerov2_depth_hold:main',
-                            'bluerov2_yaw_hold = bluerov2_controller.bluerov2_yaw_hold:main'],
+                            'bluerov2_yaw_hold = bluerov2_controller.bluerov2_yaw_hold:main',
+                            'bluerov2_pitch_controller = bluerov2_controller.bluerov2_pitch_controller:main'],
     },
 )

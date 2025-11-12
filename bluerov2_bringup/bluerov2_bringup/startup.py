@@ -43,6 +43,14 @@ class bluerov2_bringup(Node):
             qos_profile=qos_profile
         )
 
+        # Yaw PWM
+        self.sub_pitch_pwm = self.create_subscription(
+            UInt16,
+            'controller/pwm_pitch',
+            lambda msg: setattr(self, 'pitch', msg.data),
+            qos_profile=qos_profile
+        )
+
         ##### Publishers #####
         self.pub_camera_anlge = self.create_publisher(MountControl, 'mount_control/command', qos_profile = 10)
         self.pub_msg_override = self.create_publisher(OverrideRCIn, 'rc/override', qos_profile =10)
@@ -87,17 +95,23 @@ class bluerov2_bringup(Node):
         self.RC_pwms = [1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500]
         self.heave = 1500
         self.yaw = 1500
+        self.pitch = 1500
 
         self.depth_controller_node_name = "depth_controller"
         self.yaw_controller_node_name = "yaw_controller"
+        self.pitch_controller_node_name = "pitch_controller"
         self.gimbal_node_name = "bluerov2_gimbal"
 
         self.depth_manager = LifecycleManager(self, self.depth_controller_node_name)
         self.yaw_manager = LifecycleManager(self, self.yaw_controller_node_name)
+        self.pitch_manager = LifecycleManager(self, self.pitch_controller_node_name)
+
         self.gimbal_manager = LifecycleManager(self, self.gimbal_node_name)
+
 
         self.depth_manager.configure()
         self.yaw_manager.configure()
+        self.pitch_manager.configure()
         self.gimbal_manager.configure()
 
         self.create_timer(0.5, self.timer_callback)
@@ -109,6 +123,7 @@ class bluerov2_bringup(Node):
         if self.mode == "correction":
             self.RC_pwms[2] = self.heave
             self.RC_pwms[3] = self.yaw
+            self.RC_pwms[0] = self.pitch
 
         self.setOverrideRCIN(self.RC_pwms)
 
@@ -117,10 +132,12 @@ class bluerov2_bringup(Node):
             if self.mode == "correction":
                 self.depth_manager.activate()
                 self.yaw_manager.activate()
+                self.pitch_manager.activate()
                 self.gimbal_manager.activate()
             elif self.mode == "manual":
                 self.depth_manager.deactivate()
                 self.yaw_manager.deactivate()
+                self.pitch_manager.deactivate()
                 self.gimbal_manager.deactivate()
             self.mode_change = False 
                

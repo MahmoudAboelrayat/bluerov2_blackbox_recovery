@@ -251,10 +251,10 @@ class GamepadTelop(Node):
 
     def velCallback(self, cmd_vel):
         ''' Used in manual mode to read the values of the analog and map it pwm then send it the thrusters'''
-        if (self.mode != "manual"):
-            return
-        else:
-            self.get_logger().info("Sending...")
+        # if (self.mode != "manual"):
+        #     return
+        # else:
+        self.get_logger().info("Sending...")
 
         
         # Extract cmd_vel message
@@ -282,14 +282,14 @@ class GamepadTelop(Node):
 
         # Fill it with your channel data in order
         msg_array.data = [
-            np.uint16(channel_pitch),    # Channel 0
-            np.uint16(channel_roll),     # Channel 1
-            np.uint16(channel_throttle), # Channel 2
-            np.uint16(channel_yaw),      # Channel 3
-            np.uint16(channel_forward),  # Channel 4
-            np.uint16(channel_lateral),  # Channel 5
-            1500,                        # Channel 6 (camera pan)
-            1500                         # Channel 7 (camera tilt)
+            int(channel_pitch),
+            int(channel_roll),
+            int(channel_throttle),
+            int(channel_yaw),
+            int(channel_forward),
+            int(channel_lateral),
+            1500,
+            1500
         ]
         self.pub_msg_override.publish(msg_array)
 

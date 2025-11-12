@@ -203,7 +203,7 @@ class YOLOv11DetectionNode(Node):
 
             results = self.model.predict(
                 source=tmp_path,
-                conf=0.0,  # Set to 0 to get all detections, we'll filter manually
+                conf=0.3,  # Set to 0 to get all detections, we'll filter manually
                 iou=self.threshold,
                 show=False,
                 stream=False,

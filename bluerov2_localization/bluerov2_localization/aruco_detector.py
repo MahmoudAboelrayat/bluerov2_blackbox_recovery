@@ -14,7 +14,7 @@ class ArucoDetectorNode(Node):
         # Parameters
         self.declare_parameter('camera_topic', 'camera/image')
         self.declare_parameter('marker_length', 0.3)  # meters
-        self.declare_parameter('calibration_file', '/home/mahmoud/bluerov_ws/src/bluerov2_util/bluerov2_util/camera_calibration_11_11.npz')
+        self.declare_parameter('calibration_file', 'camera_calibration_11_11.npz')
 
         self.camera_topic = self.get_parameter('camera_topic').get_parameter_value().string_value
         self.marker_length = self.get_parameter('marker_length').get_parameter_value().double_value

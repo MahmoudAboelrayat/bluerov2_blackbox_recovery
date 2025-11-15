@@ -123,7 +123,7 @@ class bluerov2_bringup(Node):
         if self.mode == "correction":
             self.RC_pwms[2] = self.heave
             self.RC_pwms[3] = self.yaw
-            self.RC_pwms[0] = self.pitch
+            # self.RC_pwms[0] = self.pitch
 
         self.setOverrideRCIN(self.RC_pwms)
 

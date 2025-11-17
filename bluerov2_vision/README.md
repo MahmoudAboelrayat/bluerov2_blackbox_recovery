@@ -74,3 +74,11 @@ If you guys still don't understand what I did, or what the LLM did, here are som
 
 
 **Good luck! - Written at ungodly hours by someone who clearly needs sleep**
+
+## model table
+| model name | base model | comments |
+| -------- | -------- | -------- |
+| Mk7 | nano | old models, trained on air dataset|
+| Mk8 | nano | old models, trained on water dataset|
+| Mk9 | nano | best handle detection|
+| Mk10 | small | better blackbox detection, worser handle detection|

@@ -82,3 +82,4 @@ If you guys still don't understand what I did, or what the LLM did, here are som
 | Mk8 | nano | old models, trained on water dataset|
 | Mk9 | nano | best handle detection|
 | Mk10 | small | better blackbox detection, worser handle detection|
+| Mk22 | small | current state of the art model|

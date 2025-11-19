@@ -31,6 +31,9 @@ class YOLOv11DetectionNode(Node):
         
         # Declare ROS parameters from YAML config with constraints
         self._declare_parameters()
+
+        #show camera window parameter
+        self.show_camera_window = self.config.get('show_camera_window')
         
         # Get initial parameter values
         self._update_parameters()
@@ -50,6 +53,11 @@ class YOLOv11DetectionNode(Node):
             10  # QoS queue size
         )
         
+        self.camera_publisher = self.create_publisher(
+            Image,
+            'camera_detections',
+            10
+        )
         # Create publisher for detections
         self.detection_publisher = self.create_publisher(
             Detection,
@@ -113,6 +121,12 @@ class YOLOv11DetectionNode(Node):
         )
         self.declare_parameter('device', self.config['model']['device'], device_descriptor)
         
+        #set camera window parameter
+        show_camera_window_descriptor = ParameterDescriptor(
+            description='Show camera window with detections (true/false)'
+        )
+        self.declare_parameter('show_camera_window', self.config['show_camera_window'], show_camera_window_descriptor)
+
         self.get_logger().info("ROS parameters declared with range constraints")
 
     def _update_parameters(self):
@@ -154,6 +168,9 @@ class YOLOv11DetectionNode(Node):
             elif param.name == 'handle_detection':
                 self.handle_detection = param.value
                 self.get_logger().info(f"Updated handle_detection to {self.handle_detection}")
+            elif param.name == 'show_camera_window':
+                self.show_camera_window = param.value
+                self.get_logger().info(f"Updated show_camera_window to {self.show_camera_window}")
             elif param.name == 'device':
                 self.device = param.value
                 self.get_logger().info(f"Updated device to {self.device}")
@@ -252,9 +269,14 @@ class YOLOv11DetectionNode(Node):
                 )
 
             # Show the annotated frame
-            cv2.imshow("YOLOv11 Detections", annotated_frame)
-            cv2.waitKey(1)
-
+            if self.show_camera_window == True:
+                cv2.imshow("YOLOv11 Detections", annotated_frame)
+                cv2.waitKey(1)
+            
+            #convert annotated frame to ROS Image message and publish
+            annotated_msg = self.cv_bridge.cv2_to_imgmsg(annotated_frame, encoding='bgr8')
+            self.camera_publisher.publish(annotated_msg)
+            
             # Extract detections and publish message
             detection_msg = self._extract_detections(filtered_detections, cv_image.shape)
             self.detection_publisher.publish(detection_msg)

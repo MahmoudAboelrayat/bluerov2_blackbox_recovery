@@ -8,6 +8,9 @@ handle_confidence: 0.5
 #handle detection
 handle_detection: true
 
+#camera window
+show_camera_window: true
+
 # IOU threshold for NMS (Non-Maximum Suppression)
 # Controls how much overlap is allowed between detections
 threshold: 0.45

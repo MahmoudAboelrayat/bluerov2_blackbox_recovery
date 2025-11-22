@@ -8,7 +8,7 @@
   <xacro:arg name="controllers_file" default="controllers.yaml" />
   <xacro:arg name="initial_positions_file" default="initial_positions.yaml" />
   <xacro:arg name="namespace" default="bluerov/" />
-  <xacro:arg name="prefix" default="bluerov/" />
+  <xacro:arg name="prefix" default="" />
   <xacro:arg name="use_sim" default="true" />
   <xacro:arg name="description_package" default="bluerov2_cirtesu_core" />
 

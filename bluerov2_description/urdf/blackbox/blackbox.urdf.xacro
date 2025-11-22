@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<robot name="blackbox" xmlns:xacro="http://ros.org/wiki/xacro">
+  <!-- Define a material with a texture -->
+  <material name="blackbox_material">
+    <texture filename="$(find bluerov2_description)/resources/blackbox/back.jpg"/>
+  </material>
+  <!-- Define the base link with visual and collision elements -->
+  <link name="blackbox_center">
+    <!-- Visual element using vis.obj and the defined material -->
+    <visual>
+      <origin xyz="0 0 0" rpy="1.57 0 -1.57"/>
+      <geometry>
+        <mesh filename="package://bluerov2_description/resources/blackbox/blackbox.dae" scale="1 1 1"/>
+      </geometry>
+      <material name="blackbox_material"/>
+    </visual>
+  </link>
+</robot>

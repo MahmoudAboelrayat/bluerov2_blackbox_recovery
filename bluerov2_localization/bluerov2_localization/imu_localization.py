@@ -13,11 +13,11 @@ class ImuLocalization(Node):
     def __init__(self):
         super().__init__("imu_localization")
         self.prev_time = None
-        self.sim = True
+        self.sim = False
         if self.sim:
             topic_name = "/bluerov/imu/data"
         else:
-            topic_name = "imu/data"
+            topic_name = "bluerov2/imu/data"
 
         self.get_logger().info(f"localization node started subscribing to {topic_name}")
         qos_profile = QoSProfile(
@@ -28,7 +28,7 @@ class ImuLocalization(Node):
         self.sub_imu = self.create_subscription(Imu, topic_name, self.update_position, qos_profile=qos_profile)
         self.pub_odom = self.create_publisher(Odometry, 'imu_odom', 10)
 
-        self.pos = self.pos = np.array([5.5, 3.0, 0.0]) 
+        self.pos = np.array([0.2, 7.6, 0.0]) 
         self.vel = np.zeros(3)
         self.vel_threshold = 0.01
 

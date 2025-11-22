@@ -8,24 +8,41 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     ns = LaunchConfiguration('namespace')
+    use_camera_tf = LaunchConfiguration('camera_tf')
     namespace_arg = DeclareLaunchArgument(
         'namespace',
         default_value='bluerov2',
         description='Robot namespace'
     )
+    camera_tf_arg = DeclareLaunchArgument(
+        'camera_tf',
+        default_value='false',
+        description='Use defult tf between camera and base_link'
+    )
 
     pkg_path = get_package_share_directory('bluerov2_localization')
-    param_file_path = os.path.join(pkg_path, 'param', 'camera_calibration_11_11.npz')
+    param_file_path = os.path.join(pkg_path, 'param', 'camera_calibration_19_11.npz')
 
+    calb = LaunchConfiguration('calb')
+    calb_arg = DeclareLaunchArgument(
+        'calb',
+        default_value=param_file_path,
+        description='camera calibration file (.npz)'
+    )
+
+    description_pkg = get_package_share_directory('bluerov2_description')
+    description_launch = os.path.join(description_pkg,'launch','robot_descripition.launch.py')
     return LaunchDescription([
         namespace_arg,
+        calb_arg,
+        camera_tf_arg,
         Node(
             package='bluerov2_localization',
             executable='aruco_detector',
             name='aruco_detector',
             namespace=ns,
             output='screen',
-            parameters=[{'calibration_file':param_file_path}],
+            parameters=[{'calibration_file':calb}],
         ),
 
         Node(
@@ -41,6 +58,10 @@ def generate_launch_description():
             name='aruco_localization',
             namespace=ns,
             output='screen',
-        )
+        ),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(description_launch),
+            launch_arguments={'use_tank': 'true','use_camera_tf' : use_camera_tf}.items()
+        ),
         
     ])

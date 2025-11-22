@@ -7,8 +7,13 @@ from rcl_interfaces.srv import GetParameters
 from lifecycle_msgs.msg import Transition,State
 from lifecycle_msgs.srv import ChangeState, GetState
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
-from std_msgs.msg import UInt16MultiArray, UInt16
+from std_msgs.msg import UInt16MultiArray, Float64
 from bluerov2_util import LifecycleManager
+from rcl_interfaces.msg import SetParametersResult
+from geometry_msgs.msg import TransformStamped
+from tf_transformations import quaternion_from_euler
+from tf2_ros import TransformBroadcaster
+import math
 class bluerov2_bringup(Node):
     def __init__(self):
         super().__init__("bluerov2_bringup")
@@ -27,30 +32,20 @@ class bluerov2_bringup(Node):
             qos_profile=qos_profile
         )
 
-        # Heave PWM
-        self.sub_heave_pwm = self.create_subscription(
-            UInt16,
-            'controller/pwm_heave',
-            lambda msg: setattr(self, 'heave', msg.data),
+        # controller PWM
+        self.sub_pwm = self.create_subscription(
+            UInt16MultiArray,
+            'controller/pwm',
+            self.set_controller_pwm,
             qos_profile=qos_profile
         )
 
-        # Yaw PWM
-        self.sub_yaw_pwm = self.create_subscription(
-            UInt16,
-            'controller/pwm_yaw',
-            lambda msg: setattr(self, 'yaw', msg.data),
-            qos_profile=qos_profile
+        self.camera_angle_sub = self.create_subscription(
+            Float64,
+            'camera/angle',
+            self.angle_callback,
+            10
         )
-
-        # Yaw PWM
-        self.sub_pitch_pwm = self.create_subscription(
-            UInt16,
-            'controller/pwm_pitch',
-            lambda msg: setattr(self, 'pitch', msg.data),
-            qos_profile=qos_profile
-        )
-
         ##### Publishers #####
         self.pub_camera_anlge = self.create_publisher(MountControl, 'mount_control/command', qos_profile = 10)
         self.pub_msg_override = self.create_publisher(OverrideRCIn, 'rc/override', qos_profile =10)
@@ -72,6 +67,7 @@ class bluerov2_bringup(Node):
         self.declare_parameter("tilt_max", 45.0)
         self.declare_parameter("tilt_min", -45.0)
         self.declare_parameter("mode", "manual")
+        self.declare_parameter("enable_gimbal", False)
 
         self.light_pin = self.get_parameter("light_pin").value
         self.camera_servo_pin = self.get_parameter("camera_pen").value
@@ -87,15 +83,20 @@ class bluerov2_bringup(Node):
         self.gripper_available = self.get_parameter("gripper_available").value
         self.mode = self.get_parameter("mode").value
         self.initialization_test_flag = self.get_parameter("initialize").value
+        self.enable_gimbal = self.get_parameter("enable_gimbal").value
+        self.add_on_set_parameters_callback(self.parameter_update_callback)
 
         self.mode_change = False
         if self.initialization_test_flag:
             self.initialization_test()
 
         self.RC_pwms = [1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500]
+        self.surge = 1500
+        self.sway = 1500
         self.heave = 1500
-        self.yaw = 1500
+        self.roll = 1500
         self.pitch = 1500
+        self.yaw = 1500
 
         self.depth_controller_node_name = "depth_controller"
         self.yaw_controller_node_name = "yaw_controller"
@@ -114,17 +115,49 @@ class bluerov2_bringup(Node):
         self.pitch_manager.configure()
         self.gimbal_manager.configure()
 
-        self.create_timer(0.5, self.timer_callback)
+        self.create_timer(0.2, self.timer_callback)
+
+         # TF broadcaster
+        self.tf_broadcaster = TransformBroadcaster(self)
+
+        # Last angle
+        self.last_angle_deg = 0.0
+
+        # Timer to publish TF at 10 Hz
+        self.timer = self.create_timer(0.1, self.publish_tf)
+
+
+   
+    def parameter_update_callback(self, params):
+        for param in params:
+           if param.name == "enable_gimbal":
+                self.enable_gimbal = param.value
+                if self.enable_gimbal:
+                    self.get_logger().info(f"Gimbal controller enabled")
+                else:
+                    self.get_logger().info("Gimbal controller disabled")
+
+        return SetParametersResult(successful=True)
+    
+    def set_controller_pwm(self,msg):
+        self.surge, self.sway, self.heave, self.roll, self.pitch, self.yaw = msg.data
 
     def timer_callback(self):
         self.get_mode("mode")
-        self.get_logger().info(f"the mode is: {self.mode}")
         #### Sending Thruster Commands ####
         if self.mode == "correction":
+            self.RC_pwms[0] = self.pitch
+            self.RC_pwms[1] = self.roll
+            # self.RC_pwms[2] += self.heave - 1500
+            # self.RC_pwms[3] += self.yaw - 1500
+            # self.RC_pwms[4] += self.surge - 1500
+            # self.RC_pwms[5] += self.sway - 1500
+
             self.RC_pwms[2] = self.heave
             self.RC_pwms[3] = self.yaw
-            # self.RC_pwms[0] = self.pitch
-
+            self.RC_pwms[4] = self.surge
+            self.RC_pwms[5] = self.sway
+        # self.get_logger().info(f"heave pwm: {self.heave}, sent pwm:{self.RC_pwms[2]}")
         self.setOverrideRCIN(self.RC_pwms)
 
         if self.mode_change:
@@ -133,12 +166,20 @@ class bluerov2_bringup(Node):
                 self.depth_manager.activate()
                 self.yaw_manager.activate()
                 self.pitch_manager.activate()
-                self.gimbal_manager.activate()
+                if self.enable_gimbal:
+                    self.gimbal_manager.activate()
             elif self.mode == "manual":
                 self.depth_manager.deactivate()
                 self.yaw_manager.deactivate()
                 self.pitch_manager.deactivate()
-                self.gimbal_manager.deactivate()
+                self.heave = 1500
+                self.yaw = 1500
+                self.pitch = 1500
+                self.roll = 1500
+                self.surge = 1500
+                self.sway = 1500
+                if self.enable_gimbal:
+                    self.gimbal_manager.deactivate()
             self.mode_change = False 
                
         
@@ -265,6 +306,38 @@ class bluerov2_bringup(Node):
             self.mode = value
         except Exception as e:
             self.get_logger().error(f'Failed to get parameter: {e}')
+
+
+    def angle_callback(self, msg: Float64):
+            self.last_angle_deg = msg.data  # in degrees
+
+    def publish_tf(self):
+        # Convert angle to radians
+        angle_rad = math.radians(self.last_angle_deg)
+
+        # Compute offsets
+        z = -0.2 * math.cos(angle_rad)
+        y = 0.2 * math.sin(angle_rad)
+        pitch = -math.pi/2+angle_rad # -90 deg + angle
+
+        # Build quaternion (roll= -pi/2, pitch=pitch, yaw=0)
+        quat = quaternion_from_euler(-math.pi/2,pitch, 0.0,axes='rzyx')
+
+        # Create TransformStamped
+        # t = TransformStamped()
+        # t.header.stamp = self.get_clock().now().to_msg()
+        # t.header.frame_id = 'camera'
+        # t.child_frame_id = 'base_link'
+        # t.transform.translation.x = 0.0
+        # t.transform.translation.y = y
+        # t.transform.translation.z = z
+        # t.transform.rotation.x = quat[0]
+        # t.transform.rotation.y = quat[1]
+        # t.transform.rotation.z = quat[2]
+        # t.transform.rotation.w = quat[3]
+
+        # # Broadcast TF
+        # self.tf_broadcaster.sendTransform(t)
 
 
 def main(args=None):

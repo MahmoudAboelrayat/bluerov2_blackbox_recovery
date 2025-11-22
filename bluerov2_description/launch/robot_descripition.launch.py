@@ -8,22 +8,33 @@ from launch.conditions import IfCondition
 
 def generate_launch_description():
     use_tank = LaunchConfiguration('use_tank')
+    use_camera_tf = LaunchConfiguration('use_camera_tf')
+    name_space = LaunchConfiguration('name_space')
+
+    pkg_path = get_package_share_directory('bluerov2_description')
+    rviz_config = os.path.join(pkg_path, 'rviz', 'bluerov_cirtesu.rviz')
+    urdf_path = os.path.join(pkg_path,'urdf')
     # Definir las descripciones de los robots
     description_file_cirtesu = os.path.join(
-        get_package_share_directory('bluerov2_description'), 
-        'urdf', 
+        urdf_path, 
         'cirtesu', 
         'cirtesu.urdf.xacro'
     )
     robot_description_cirtesu = os.popen(f'xacro {description_file_cirtesu}').read().strip()
-    
     description_file_bluerov2 = os.path.join(
-        get_package_share_directory('bluerov2_description'), 
-        'urdf', 
+        urdf_path, 
         'bluerov2_alpha', 
         'bluerov2_alpha.xacro'
     )
     robot_description_bluerov2 = os.popen(f'xacro {description_file_bluerov2}').read().strip()
+
+    description_file_blackbox = os.path.join(
+        urdf_path, 
+        'blackbox', 
+        'blackbox.urdf.xacro'
+    )
+    robot_description_blackbox = os.popen(f'xacro {description_file_blackbox}').read().strip()
+
 
     robot_state_publisher_node_bluerov2 = Node(
         package='robot_state_publisher',
@@ -33,6 +44,16 @@ def generate_launch_description():
         remappings=[('/robot_description', 'robot_description')],
         parameters=[
             {'robot_description': robot_description_bluerov2}
+        ]
+    )
+    robot_state_publisher_node_blackbox = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        output='screen',
+        name='robot_state_publisher',
+        remappings=[('/robot_description', '/blackbox/robot_description')],
+        parameters=[
+            {'robot_description': robot_description_blackbox}
         ]
     )
     robot_state_publisher_node_cirtesu = Node(
@@ -68,7 +89,7 @@ def generate_launch_description():
             output='screen',
             arguments=[
                 "--x", "0.0",
-                "--y", "0.0.",
+                "--y", "0.0",
                 "--z", "0.0",
                 "--roll", "0.0",
                 "--pitch", "0",
@@ -76,6 +97,30 @@ def generate_launch_description():
                 "--frame-id", "ned",
                 "--child-frame-id", "odom"
             ]
+        )
+    
+    camera_robot_static_tf = Node(
+        condition=IfCondition(use_camera_tf),
+        package='tf2_ros',
+            executable='static_transform_publisher',
+            output='screen',
+            arguments=[
+                "--x", "0.0",
+                "--y", "0.0.",
+                "--z", "-0.2",
+                "--roll", "-1.57",
+                "--pitch", "-1.57",
+                "--yaw", "0.0",
+                "--frame-id", "camera",
+                "--child-frame-id", "base_link"]
+    )
+    
+    rviz_node = Node(
+            package='rviz2',
+            executable='rviz2',
+            name='rviz2',
+            arguments=['-d', rviz_config],
+            output='screen'
         )
 
     return LaunchDescription([
@@ -85,10 +130,17 @@ def generate_launch_description():
             default_value='true',
             description='Flag to indicate whether to publish the cirtesu tank or not'
         ),
+        DeclareLaunchArgument(
+            'use_camera_tf',
+            default_value='true',
+            description='Flag to indicate whether to publish static tf between the camera and the robot'
+        ),
         robot_state_publisher_node_bluerov2,
         robot_state_publisher_node_cirtesu,
         cirtesu_static_tf,
         world_ned_odom_static_tf,
-        
+        camera_robot_static_tf,
+        rviz_node,
+        robot_state_publisher_node_blackbox
     ])
 

@@ -22,9 +22,9 @@ class Bluerov2DepthControl(LifecycleNode):
         self.declare_parameter('pid.ki', 0.0)
         self.declare_parameter('pid.kd', 0.0)
         self.declare_parameter('target_yaw', 0.0)
-        self.declare_parameter('input_topic', '/input')
+        self.declare_parameter('input_topic', 'imu/data')
         self.declare_parameter('setpoint_topic', '/setpoint')
-        self.declare_parameter('output_topic', 'controller/pwm_yaw')
+        self.declare_parameter('output_topic', 'controller/yaw_force')
         self.declare_parameter('control_rate', 20.0)
         self.declare_parameter('pid.i_lim',0.0)
         self.declare_parameter('enable', True)
@@ -55,12 +55,14 @@ class Bluerov2DepthControl(LifecycleNode):
         setpoint_topic = self.get_parameter('setpoint_topic').value
         self.rate = self.get_parameter('control_rate').value
         self.hold = self.get_parameter('hold').value
+        self.enable = self.get_parameter('enable').value
+
         self.get_logger().info(f"rate:{self.rate}")
 
         self._pid = PID(kp, ki, kd, i_lim, angle = True)  # optional limits
         self.get_logger().info(f"output topic: {output_topic}")
 
-        self._output_pub = self.create_publisher(UInt16, output_topic, 10)
+        self._output_pub = self.create_publisher(Float64, output_topic, 10)
 
         self._input_topic = input_topic
         self.setpoint_topic = setpoint_topic
@@ -113,7 +115,7 @@ class Bluerov2DepthControl(LifecycleNode):
             self.destroy_subscription(self.setpoint_sub)
             self.setpoint_sub = None
 
-        self.send_stop_pwm()
+        self.send_stop_force()
         return TransitionCallbackReturn.SUCCESS
 
     def on_cleanup(self, state: State) -> TransitionCallbackReturn:
@@ -142,6 +144,15 @@ class Bluerov2DepthControl(LifecycleNode):
             elif p.name == 'hold':
                 self.hold = p.value
                 self.get_logger().info(f"hold mode updated: {self.hold}")
+            elif p.name == 'target_yaw':
+                self.goal_yaw = p.value
+                self.get_logger().info(f"goal yaw changed: {self.goal_yaw}")
+            elif p.name == 'enable':
+                self.enable = p.value
+                if self.enable:
+                    self.get_logger().info("Yaw controller enabled")
+                else:
+                    self.get_logger().info("Yaw controller disabled")
         return SetParametersResult(successful=True)
 
 
@@ -175,36 +186,20 @@ class Bluerov2DepthControl(LifecycleNode):
             self.target = self.goal_yaw
 
         angle = (self._current_yaw + np.pi) % (2 * np.pi) - np.pi
-        self.get_logger().info(f"current yaw: {angle}, target yaw: {self.target}")
+        # self.get_logger().info(f"current yaw: {angle}, target yaw: {self.target}")
         out,dic = self._pid.update(self.target, self._current_yaw) 
         force = -out
-        self.get_logger().info(f"PID debug: {dic}")
-        pwm = self._force_to_pwm(force*10 / 4)
-        self.get_logger().info(f"PWM: {force}")
+        # self.get_logger().info(f"PID debug: {dic}")
+        # self.get_logger().info(f"force: {force}")
+        msg = Float64()
+        msg.data = force
+        self._output_pub.publish(msg)
 
-        msg_pwm = UInt16()
-        msg_pwm.data= int(pwm)
-        self._output_pub.publish(msg_pwm)
-
-    # Convert force to PWM
-    def _force_to_pwm(self, force):
-        if force > 0:
-            # pwm = 1536 + 9.7 * force
-            pwm = 1500 + 9.7 * force
-
-        elif force == 0:
-            pwm = 1500
-        else:
-            # pwm = 1464 + 12.781 * force
-            pwm = 1500 + 12.781 * force
-
-        return np.clip(pwm, 1300, 1700)
-
-    def send_stop_pwm(self):
-        pwm = 1500
-        msg_pwm = UInt16()
-        msg_pwm.data= int(pwm)
-        self._output_pub.publish(msg_pwm)
+    def send_stop_force(self):
+        f = 0.0
+        msg_force = Float64()
+        msg_force.data= f
+        self._output_pub.publish(msg_force)
 
 
 def main(args=None):

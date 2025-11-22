@@ -82,6 +82,12 @@ def generate_launch_description():
         launch_arguments={'namespace': ns}.items()
     )
 
+    controllers_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(controller_pkg, 'launch', 'bluerov2_controller.launch.py')
+        ),
+        launch_arguments={'namespace': ns}.items()
+    )
     return LaunchDescription([
         namespace_arg,
         with_camera_arg,
@@ -89,6 +95,7 @@ def generate_launch_description():
         params_file_arg,
         video_node,
         startup_node,
+        controllers_launch,
         # teleop_launch,
         # mavros_launch,
         # gimbal_launch

@@ -9,10 +9,11 @@
     flotability: 3.3
     input_topic: "global_position/rel_alt"
     setpoint_topic: "desired_depth"
-    output_topic: "controller/pwm_heave"
+    output_topic: "controller/heave_force"
     control_rate: 20.0
     hold: False
     enable: True
+    inverted: False
 
 
 /bluerov2/yaw_controller:
@@ -22,12 +23,12 @@
       ki: 0.0
       kd: 0.0
     target_yaw: 0.785
-    input_topic: "imu/data"
+    input_topic: "/bluerov/imu/data"
     setpoint_topic: "desired_yaw"
-    output_topic: "controller/pwm_yaw"
+    output_topic: "controller/yaw_force"
     control_rate: 20.0
     hold: True
-    enable: True
+    enable: False
 
 /bluerov2/pitch_controller:
   ros__parameters:
@@ -38,7 +39,15 @@
     target_yaw: 0.785
     input_topic: "imu/data"
     setpoint_topic: "desired_pitch"
-    output_topic: "controller/pwm_pitch"
+    output_topic: "controller/pitch_force"
     control_rate: 20.0
     hold: True
-    enable: True
+    enable: False
+
+/bluerov2/frame_transform:
+  ros__parameters:
+    heave_topic: "controller/heave_force"
+    yaw_topic: "controller/yaw_force"
+    pitch_topic: "controller/pitch_force"
+    imu_topic: "imu/data"
+    output_topic: "controller/pwm"

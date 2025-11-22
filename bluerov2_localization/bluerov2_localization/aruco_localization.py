@@ -1,98 +1,201 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import PoseArray, PoseStamped
+
+from geometry_msgs.msg import PoseArray, TransformStamped, PoseWithCovarianceStamped
+from nav_msgs.msg import Odometry
 from tf2_ros import TransformBroadcaster, Buffer, TransformListener
-from geometry_msgs.msg import TransformStamped
 from tf_transformations import quaternion_matrix, quaternion_from_matrix
 import numpy as np
+
 
 class CameraPoseFromMarkers(Node):
     def __init__(self):
         super().__init__('camera_pose_from_markers')
+
         self.subscription = self.create_subscription(
             PoseArray,
-            'aruco_poses',  # camera -> marker poses
+            'aruco_poses',       # pose of markers in CAMERA frame
             self.pose_callback,
             10
         )
 
+        # Publishers
         self.tf_broadcaster = TransformBroadcaster(self)
+        # self.odom_pub = self.create_publisher(Odometry, 'aruco_odom', 10)
+        self.odom_pub = self.create_publisher(PoseWithCovarianceStamped, 'aruco_odom', 10)
+
+
+        # TF utilities
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
-        self.cam_pose_pub = self.create_publisher(PoseStamped, 'aruco_odom', 10)
-        self.get_logger().info('Camera Pose from Markers Node started.')
+
+        # Smoothing variables
+        self.last_pos = None
+        self.last_quat = None
+        self.alpha_pos = 0.35
+        self.alpha_rot = 0.35
+
+        self.missed_frames = 0
+        self.reset_after = 5
+
+        self.get_logger().info("Camera odometry estimation node started.")
+
+    def smooth_position(self, raw_pos):
+        return self.alpha_pos * raw_pos + (1 - self.alpha_pos) * self.last_pos
+
+    def smooth_quaternion(self, raw_q):
+        q = self.alpha_rot * raw_q + (1 - self.alpha_rot) * self.last_quat
+        return q / np.linalg.norm(q)
 
     def pose_callback(self, msg: PoseArray):
+
         cam_positions = []
         cam_rotations = []
 
         for i, pose in enumerate(msg.poses):
+
             if pose.position.x == -999.99:
-                continue  # marker not found
+                continue
 
-            # Camera -> Marker (from PoseArray)
-            T_cam_marker = quaternion_matrix([pose.orientation.x, pose.orientation.y,
-                                             pose.orientation.z, pose.orientation.w])
-            T_cam_marker[:3, 3] = [pose.position.x, pose.position.y, pose.position.z]
+            # Camera → Marker transform
+            T_cam_marker = quaternion_matrix([
+                pose.orientation.x, pose.orientation.y,
+                pose.orientation.z, pose.orientation.w
+            ])
+            T_cam_marker[:3, 3] = [
+                pose.position.x, pose.position.y, pose.position.z
+            ]
 
-            # Invert to get Marker -> Camera
             T_marker_cam = np.linalg.inv(T_cam_marker)
 
-            try:
-                # Lookup NED -> Marker_i
-                marker_frame = f'aruco_{i}'  # adjust naming to match your TF tree
-                t = self.tf_buffer.lookup_transform('ned', marker_frame, rclpy.time.Time())
-                T_ned_marker = quaternion_matrix([t.transform.rotation.x,
-                                                 t.transform.rotation.y,
-                                                 t.transform.rotation.z,
-                                                 t.transform.rotation.w])
-                T_ned_marker[:3, 3] = [t.transform.translation.x,
-                                        t.transform.translation.y,
-                                        t.transform.translation.z]
+            marker_frame = f"aruco_{i}"
 
-                # Chain: NED -> Marker -> Camera
-                T_ned_cam = np.dot(T_ned_marker, T_marker_cam)
+            try:
+                t = self.tf_buffer.lookup_transform(
+                    "ned", marker_frame, rclpy.time.Time()
+                )
+
+                T_ned_marker = quaternion_matrix([
+                    t.transform.rotation.x,
+                    t.transform.rotation.y,
+                    t.transform.rotation.z,
+                    t.transform.rotation.w
+                ])
+                T_ned_marker[:3, 3] = [
+                    t.transform.translation.x,
+                    t.transform.translation.y,
+                    t.transform.translation.z
+                ]
+
+                T_ned_cam = T_ned_marker @ T_marker_cam
+
                 cam_positions.append(T_ned_cam[:3, 3])
                 cam_rotations.append(quaternion_from_matrix(T_ned_cam))
 
             except Exception as e:
-                self.get_logger().warn(f"Could not lookup TF for {marker_frame}: {e}")
+                self.get_logger().warn(f"TF lookup failed for {marker_frame}: {e}")
                 continue
 
         if len(cam_positions) == 0:
-            return  # no markers visible
+            self.missed_frames += 1
 
-        # Average positions and rotations
-        cam_pos_avg = np.mean(cam_positions, axis=0)
-        q_avg = np.mean(cam_rotations, axis=0)
-        q_avg /= np.linalg.norm(q_avg)
+            if self.missed_frames > self.reset_after:
+                self.last_pos = None
+                self.last_quat = None
+            return
 
-        # Publish PoseStamped
-        pose_msg = PoseStamped()
+        self.missed_frames = 0
+
+        raw_pos = np.mean(cam_positions, axis=0)
+        raw_quat = np.mean(cam_rotations, axis=0)
+        raw_quat /= np.linalg.norm(raw_quat)
+
+        if self.last_pos is None:
+            cam_pos = raw_pos
+            cam_quat = raw_quat
+        else:
+            cam_pos = self.smooth_position(raw_pos)
+            cam_quat = self.smooth_quaternion(raw_quat)
+
+        self.last_pos = cam_pos
+        self.last_quat = cam_quat
+
+
+        try:
+            # Lookup camera -> base_link transform
+            t_cam_bl = self.tf_buffer.lookup_transform(
+                "base_link", "camera", rclpy.time.Time()
+            )
+
+            # Convert to homogeneous matrix
+            T_cam_bl = quaternion_matrix([
+                t_cam_bl.transform.rotation.x,
+                t_cam_bl.transform.rotation.y,
+                t_cam_bl.transform.rotation.z,
+                t_cam_bl.transform.rotation.w
+            ])
+            T_cam_bl[:3, 3] = [
+                t_cam_bl.transform.translation.x,
+                t_cam_bl.transform.translation.y,
+                t_cam_bl.transform.translation.z
+            ]
+
+            # Transform camera pose in NED to base_link
+            T_ned_bl = T_ned_cam @ T_cam_bl
+
+            # Extract translation and rotation
+            base_pos = T_ned_bl[:3, 3]
+            base_quat = quaternion_from_matrix(T_ned_bl)
+            base_quat /= np.linalg.norm(base_quat)
+
+        except Exception as e:
+            self.get_logger().warn(f"Camera->base_link TF lookup failed: {e}")
+            return
+
+
+        pose_msg = PoseWithCovarianceStamped()
         pose_msg.header.stamp = self.get_clock().now().to_msg()
-        pose_msg.header.frame_id = 'ned'
-        pose_msg.pose.position.x = cam_pos_avg[0]
-        pose_msg.pose.position.y = cam_pos_avg[1]
-        pose_msg.pose.position.z = cam_pos_avg[2]
-        pose_msg.pose.orientation.x = q_avg[0]
-        pose_msg.pose.orientation.y = q_avg[1]
-        pose_msg.pose.orientation.z = q_avg[2]
-        pose_msg.pose.orientation.w = q_avg[3]
-        self.cam_pose_pub.publish(pose_msg)
+        pose_msg.header.frame_id = "ned"  # world frame
 
-        # Publish TF from NED -> camera
+        # Position
+        pose_msg.pose.pose.position.x = float(base_pos[0])
+        pose_msg.pose.pose.position.y = float(base_pos[1])
+        pose_msg.pose.pose.position.z = float(base_pos[2])
+
+        # Orientation
+        pose_msg.pose.pose.orientation.x = float(base_quat[0])
+        pose_msg.pose.pose.orientation.y = float(base_quat[1])
+        pose_msg.pose.pose.orientation.z = float(base_quat[2])
+        pose_msg.pose.pose.orientation.w = float(base_quat[3])
+
+        # Covariance (keep same as before)
+        pose_msg.pose.covariance = [
+            0.2, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.2, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.2, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 100.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 100.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 100.0
+        ]
+
+        self.odom_pub.publish(pose_msg)
+
+
+
+
         tf_msg = TransformStamped()
-        tf_msg.header.stamp = self.get_clock().now().to_msg()
-        tf_msg.header.frame_id = 'ned'
-        tf_msg.child_frame_id = 'camera'
-        tf_msg.transform.translation.x = cam_pos_avg[0]
-        tf_msg.transform.translation.y = cam_pos_avg[1]
-        tf_msg.transform.translation.z = cam_pos_avg[2]
-        tf_msg.transform.rotation.x = q_avg[0]
-        tf_msg.transform.rotation.y = q_avg[1]
-        tf_msg.transform.rotation.z = q_avg[2]
-        tf_msg.transform.rotation.w = q_avg[3]
+        tf_msg.header = pose_msg.header
+        tf_msg.child_frame_id = "camera"
+
+        tf_msg.transform.translation.x = cam_pos[0]
+        tf_msg.transform.translation.y = cam_pos[1]
+        tf_msg.transform.translation.z = cam_pos[2]
+        tf_msg.transform.rotation.x = cam_quat[0]
+        tf_msg.transform.rotation.y = cam_quat[1]
+        tf_msg.transform.rotation.z = cam_quat[2]
+        tf_msg.transform.rotation.w = cam_quat[3]
+
         self.tf_broadcaster.sendTransform(tf_msg)
 
 
@@ -104,5 +207,5 @@ def main():
     rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

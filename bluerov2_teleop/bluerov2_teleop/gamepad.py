@@ -76,13 +76,13 @@ class GamepadTelop(Node):
         self.cmd_subscriber  # prevent unused variable warning
 
        # Subscription
-        self.sub_camera_angle = self.create_subscription(
-            MountControl,  # replace MountStatus
-            'mount_control/status',
-            self.get_camera_angle,
-            qos_profile= qos_profile
-        )
-        self.sub_camera_angle  # prevent unused variable warning
+        # self.sub_camera_angle = self.create_subscription(
+        #     MountControl,  # replace MountStatus
+        #     'mount_control/status',
+        #     self.get_camera_angle,
+        #     qos_profile= qos_profile
+        # )
+        # self.sub_camera_angle  # prevent unused variable warning
 
     def get_camera_angle(self, msg):
         """

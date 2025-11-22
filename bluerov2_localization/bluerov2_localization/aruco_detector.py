@@ -14,7 +14,7 @@ class ArucoDetectorNode(Node):
         # Parameters
         self.declare_parameter('camera_topic', 'camera/image')
         self.declare_parameter('marker_length', 0.3)  # meters
-        self.declare_parameter('calibration_file', 'camera_calibration_11_11.npz')
+        self.declare_parameter('calibration_file', 'bluerov2_localization/param/camera_calibration_11_11.npz')
 
         self.camera_topic = self.get_parameter('camera_topic').get_parameter_value().string_value
         self.marker_length = self.get_parameter('marker_length').get_parameter_value().double_value
@@ -27,7 +27,7 @@ class ArucoDetectorNode(Node):
 
         # ArUco dictionary and detector parameters
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-        self.parameters = cv2.aruco.DetectorParameters()  # correct for OpenCV ≥4.7
+        self.parameters = cv2.aruco.DetectorParameters() 
 
         # CV bridge
         self.bridge = CvBridge()
@@ -42,7 +42,7 @@ class ArucoDetectorNode(Node):
 
         # Publisher for detected marker poses
         self.pose_pub = self.create_publisher(PoseArray, 'aruco_poses', 10)
-
+        self.min_area = 500
         self.get_logger().info(f"Aruco detector node started, listening to {self.camera_topic}")
 
     def image_callback(self, msg):
@@ -67,9 +67,21 @@ class ArucoDetectorNode(Node):
             valid_indices = [i for i, marker_id in enumerate(ids.flatten()) if 0 <= marker_id <= 8]
 
             if valid_indices:
-                filtered_corners = [corners[i] for i in valid_indices]
-                filtered_ids = [ids[i] for i in valid_indices]
+                filtered_corners = []
+                filtered_ids = []
 
+                for i in valid_indices:
+
+                    pts = corners[i][0]  # (4,2)
+
+                    area = cv2.contourArea(pts)
+
+                    if area < self.min_area:
+                        continue
+                    filtered_corners.append(corners[i])
+                    filtered_ids.append(ids[i])
+
+                    
                 # Estimate pose of detected markers
                 rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
                     filtered_corners, self.marker_length, self.camera_matrix, self.dist_coeffs
@@ -81,6 +93,10 @@ class ArucoDetectorNode(Node):
                         # Get translation and rotation
                         tvec = tvecs[i][0]
                         rvec = rvecs[i][0]
+
+                        if tvec[2] < 0.0:
+                            tvec[1] = -tvec[1]
+                            tvec[2] = -tvec[2]
 
                         rot_matrix, _ = cv2.Rodrigues(rvec)
                         quat = self.rotation_matrix_to_quaternion(rot_matrix)

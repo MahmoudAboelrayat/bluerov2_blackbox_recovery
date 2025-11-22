@@ -22,13 +22,14 @@ class Bluerov2DepthControl(LifecycleNode):
         self.declare_parameter('pid.kd', 0.0)
         self.declare_parameter('target_depth', 0.0)
         self.declare_parameter('flotability', 0.0)
-        self.declare_parameter('input_topic', '/input')
-        self.declare_parameter('setpoint_topic', '/setpoint')
-        self.declare_parameter('output_topic', 'controller/pwm_depth')
+        self.declare_parameter('input_topic', 'input')
+        self.declare_parameter('setpoint_topic', 'setpoint')
+        self.declare_parameter('output_topic', 'controller/heave_force')
         self.declare_parameter('control_rate', 20.0)
         self.declare_parameter('pid.i_lim',0.0)
         self.declare_parameter('enable', True)
         self.declare_parameter("hold",False)
+        self.declare_parameter("inverted",False)
 
         self.add_on_set_parameters_callback(self._on_set_parameters)
 
@@ -58,12 +59,13 @@ class Bluerov2DepthControl(LifecycleNode):
         setpoint_topic = self.get_parameter('setpoint_topic').value
         self.rate = self.get_parameter('control_rate').value
         self.hold = self.get_parameter('hold').value
+        self.enable = self.get_parameter('enable').value
         self.get_logger().info(f"rate:{self.rate}")
-
+        self.inverted = self.get_parameter('inverted').value
         self._pid = PID(kp, ki, kd, i_lim)  # optional limits
         self.get_logger().info(f"output topic: {output_topic}")
 
-        self._output_pub = self.create_publisher(UInt16, output_topic, 10)
+        self._output_pub = self.create_publisher(Float64, output_topic, 10)
 
         self._input_topic = input_topic
         self.setpoint_topic = setpoint_topic
@@ -102,6 +104,7 @@ class Bluerov2DepthControl(LifecycleNode):
     def on_deactivate(self, state: State) -> TransitionCallbackReturn:
         self.get_logger().info("Deactivating Depth Controller...")
         # Stop the control loop
+        self.send_stop_force()
         if hasattr(self, "_timer") and self._timer is not None:
             self._timer.cancel()
             self.destroy_timer(self._timer)
@@ -116,7 +119,7 @@ class Bluerov2DepthControl(LifecycleNode):
             self.destroy_subscription(self.setpoint_sub)
             self.setpoint_sub = None
 
-        self.send_stop_pwm()
+        
         return TransitionCallbackReturn.SUCCESS
 
     def on_cleanup(self, state: State) -> TransitionCallbackReturn:
@@ -151,8 +154,19 @@ class Bluerov2DepthControl(LifecycleNode):
             elif p.name == 'target_depth':
                 self.goal_depth = p.value
                 self.get_logger().info(f"goal depth changed: {self.goal_depth}")
-
-        return SetParametersResult(successful=True)
+            elif p.name == 'enable':
+                self.enable = p.value
+                if self.enable:
+                    self.get_logger().info("Depth controller enabled")
+                else:
+                    self.get_logger().info("Depth controller disabled")
+            elif p.name == 'inverted':
+                self.inverted = p.value
+                if self.inverted:
+                    self.get_logger().info(f"heave thrust inverted")
+                else:
+                    self.get_logger().info(f"heave thrust normal")
+            return SetParametersResult(successful=True)
 
 
     # Subscriber callback
@@ -163,8 +177,10 @@ class Bluerov2DepthControl(LifecycleNode):
 
     # Timer callback: computes PID output and publishes RC override
     def _control_loop(self):
-        if self._pid is None:
+        if self._pid is None or not self.enable:
+            self.send_stop_force()
             return
+        
         if self.hold:
             if self.init_control:
                 self.init_control = False
@@ -173,28 +189,21 @@ class Bluerov2DepthControl(LifecycleNode):
             self.target = self.goal_depth
 
         out,dic = self._pid.update(self.target, self._current_depth,feedforward=self.flotability/10) 
-        force = -out
-        self.get_logger().info(f"Target: {self.target}, current depth: {self._current_depth}")
-        self.get_logger().info(f"PID debug: {dic}")
-        pwm = self._force_to_pwm(force*10 / 4)
-
-        msg_pwm = UInt16()
-        msg_pwm.data= int(pwm)  # heave
-        self._output_pub.publish(msg_pwm)
-
-    # Convert force to PWM
-    def _force_to_pwm(self, force):
-        if force > 0:
-            pwm = 1536 + 9.7 * force
+        if self.inverted:
+            force = out
         else:
-            pwm = 1464 + 12.781 * force
-        return np.clip(pwm, 1300, 1700)
+            force = -out
+        # self.get_logger().info(f"Target: {self.target}, current depth: {self._current_depth}")
+        # self.get_logger().info(f"PID debug: {dic}")
 
-    def send_stop_pwm(self):
-        pwm = 1500
-        msg_pwm = UInt16()
-        msg_pwm.data= int(pwm)
-        self._output_pub.publish(msg_pwm)
+        msg = Float64()
+        msg.data = force
+        self._output_pub.publish(msg)
+    def send_stop_force(self):
+        f = 0.0
+        msg_force = Float64()
+        msg_force.data= f
+        self._output_pub.publish(msg_force)
 
 
 def main(args=None):

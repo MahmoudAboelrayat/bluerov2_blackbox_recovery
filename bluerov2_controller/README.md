@@ -13,12 +13,12 @@ You can launch the controller using the provided launch file.
 
 **Basic Launch:**
 ```bash
-ros2 launch bluerov2_controller visual_servo.launch.py
+ros2 launch bluerov2_controller bluerov2_Vision_Controller.launch.py
 ```
 
 **Launch with Custom Namespace:**
 ```bash
-ros2 launch bluerov2_controller visual_servo.launch.py namespace:=my_bluerov
+ros2 launch bluerov2_controller bluerov2_Vision_Controller.launch.py namespace:=my_bluerov
 ```
 
 ## Editable Parameters

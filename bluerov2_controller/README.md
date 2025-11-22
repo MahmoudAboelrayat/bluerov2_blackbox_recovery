@@ -53,7 +53,7 @@ All parameters can be modified in real-time (dynamically) without restarting the
 | `invert_heave` | `True` | Invert heave thruster direction. |
 | `invert_yaw` | `True` | Invert yaw thruster direction. |
 
-## 🎛️ GUI Parameter Tuning (rqt)
+## GUI Parameter Tuning (rqt)
 
 You can use the ROS 2 GUI tools to adjust gains and switches visually using sliders and checkboxes.
 

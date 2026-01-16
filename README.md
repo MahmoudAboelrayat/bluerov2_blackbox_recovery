@@ -138,20 +138,10 @@ ros2 launch bluerov2_webui launch_webui.launch.py
 
 ## 🕹️ Controls & Workflow
 
-1. **Search Phase:** Pilot flies manually or enables "Search Pattern" via Web UI.
-2. **Detection:** The Vision node detects the Blackbox. A bounding box appears on the Web UI video feed.
-3. **Validation:** The system verifies if the "Handle" is inside the "Blackbox".
-4. **Recovery:**
-* The Pilot confirms the detection.
-* Pilot toggles **"Approaching Mode"**.
-* The ROV automatically centers on the target, descends, and closes the gripper.
-
-
-
-## 📄 License
-
-Distributed under the MIT License. See `LICENSE` for more information.
-
-```
-
-```
+The semi-autonomous black box recovery mission integrates human supervision with autonomous control across six distinct phases (Fig. \ref{fig:mission_flow}):
+1. **System Initialization & Deployment:** Human-controlled ROV deployment and system startup.
+2. **Search Phase:** Pilot navigates manually or activates autonomous "Search Pattern" via Web UI.
+3. **Detection & Validation:** The Vision node identifies the Blackbox and displays a bounding box on the Web UI video feed. The system verifies that the "Handle" is positioned inside the "Blackbox" region.
+4. **Hybrid Visual Servoing:** Upon pilot confirmation of detection, the pilot toggles **"Approaching Mode"**. The ROV autonomously centers on the target using visual servoing and descends toward the Blackbox.
+5. **Human-Confirmed Grasping:** The pilot confirms final positioning before the system executes autonomous gripper closure to attach the carabiner to the box.
+6. **Surface Recovery:** Human-assisted retrieval of the ROV with attached Blackbox to the surface.

@@ -145,3 +145,5 @@ The semi-autonomous black box recovery mission integrates human supervision with
 4. **Hybrid Visual Servoing:** Upon pilot confirmation of detection, the pilot toggles **"Approaching Mode"**. The ROV autonomously centers on the target using visual servoing and descends toward the Blackbox.
 5. **Human-Confirmed Grasping:** The pilot confirms final positioning before the system executes autonomous gripper closure to attach the carabiner to the box.
 6. **Surface Recovery:** Human-assisted retrieval of the ROV with attached Blackbox to the surface.
+
+The joystick control can be found here ![Joystick defaults](https://github.com/MahmoudAboelrayat/bluerov2_blackbox_recovery/blob/main/joystick-defaults-1024x768.webp):

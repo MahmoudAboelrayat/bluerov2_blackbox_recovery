@@ -144,4 +144,4 @@ ros2 launch bluerov2_webui launch_webui.launch.py
 5. **Human-Confirmed Grasping:** The pilot confirms final positioning before the system executes autonomous gripper closure to attach the carabiner to the box.
 6. **Surface Recovery:** Human-assisted retrieval of the ROV with attached Blackbox to the surface.
 
-The joystick control can be found here ![Joystick defaults](https://github.com/MahmoudAboelrayat/bluerov2_blackbox_recovery/blob/main/joystick-defaults-1024x768.webp):
+The joystick control can be found here ![Joystick defaults](https://github.com/MahmoudAboelrayat/bluerov2_blackbox_recovery/blob/main/joystick-defaults-1024x768.png):

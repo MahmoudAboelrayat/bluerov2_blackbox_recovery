@@ -137,8 +137,6 @@ ros2 launch bluerov2_webui launch_webui.launch.py
 ```
 
 ## 🕹️ Controls & Workflow
-
-The semi-autonomous black box recovery mission integrates human supervision with autonomous control across six distinct phases (Fig. \ref{fig:mission_flow}):
 1. **System Initialization & Deployment:** Human-controlled ROV deployment and system startup.
 2. **Search Phase:** Pilot navigates manually or activates autonomous "Search Pattern" via Web UI.
 3. **Detection & Validation:** The Vision node identifies the Blackbox and displays a bounding box on the Web UI video feed. The system verifies that the "Handle" is positioned inside the "Blackbox" region.
